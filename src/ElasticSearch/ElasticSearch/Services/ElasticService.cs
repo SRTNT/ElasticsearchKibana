@@ -37,12 +37,12 @@ namespace ElasticSearch.Services
         public async Task<bool> GetIndexExistsAsync(string indexName)
         {
             var response = await _elasticClient.Indices.ExistsAsync(GetIndexName(indexName));
-            return response.Exists;
+            return response.IsValidResponse ? response.Exists : false;
         }
         #endregion
 
         #region Create Index
-        public async Task<bool> CreateIndexAsync(string indexName, string? mapping = null)
+        public async Task<bool> CreateIndexAsync<T>(string indexName, Action<Elastic.Clients.Elasticsearch.Mapping.TypeMappingDescriptor<T>>? mapping = null)
         {
             if (await GetIndexExistsAsync(indexName))
                 return true;
@@ -50,44 +50,53 @@ namespace ElasticSearch.Services
             indexName = GetIndexName(indexName);
 
             Elastic.Clients.Elasticsearch.IndexManagement.CreateIndexResponse response;
-            if (string.IsNullOrEmpty(mapping))
+            if (mapping is null)
             {
-                response = await _elasticClient.Indices.CreateAsync(indexName);
+                response = await _elasticClient.Indices.CreateAsync
+                    (index: indexName,
+                     action: c => c.Settings(s => s.NumberOfShards(1) // شاردها بخش‌های ایندکس هستند که می‌توانند به صورت موازی پردازش شوند.
+                                                   .NumberOfReplicas(1))); // نسخه‌های پشتیبان برای افزایش دسترسی و تحمل خطا استفاده می‌شوند.
             }
             else
             {
-                response = await _elasticClient.Indices.CreateAsync(indexName, c => c.Mappings(m =>
-                {
-                    var mappingJson = JsonSerializer.Deserialize<Dictionary<string, object>>(mapping);
-                    foreach (var field in mappingJson)
-                    {
-                        if (field.Value is JsonElement element && element.TryGetProperty("type", out var typeProperty))
-                        {
-                            var fieldType = typeProperty.GetString();
-                            switch (fieldType)
-                            {
-                                case "text":
-                                    m.Properties(p => p.Text(field.Key));
-                                    break;
-                                case "keyword":
-                                    m.Properties(p => p.Keyword(field.Key));
-                                    break;
-                                case "date":
-                                    m.Properties(p => p.Date(field.Key));
-                                    break;
-                                case "integer":
-                                    m.Properties(p => p.IntegerNumber(field.Key));
-                                    break;
-                                default:
-                                    throw new NotSupportedException($"Field type '{fieldType}' is not supported.");
-                            }
-                        }
-                    }
-                }));
+                response = await _elasticClient.Indices.CreateAsync
+                    (index: indexName,
+                     action: c => c.Settings(s => s.NumberOfShards(1) // شاردها بخش‌های ایندکس هستند که می‌توانند به صورت موازی پردازش شوند.
+                                                   .NumberOfReplicas(1)) // نسخه‌های پشتیبان برای افزایش دسترسی و تحمل خطا استفاده می‌شوند.
+                                   .Mappings(mapping)
+                    );
 
+                /*.Mappings(m =>
+                  {
+                      var mappingJson = JsonSerializer.Deserialize<Dictionary<string, object>>(mapping)!;
+                      foreach (var field in mappingJson)
+                      {
+                          if (field.Value is JsonElement element && element.TryGetProperty("type", out var typeProperty))
+                          {
+                              var fieldType = typeProperty.GetString();
+                              switch (fieldType)
+                              {
+                                  case "text":
+                                      m.Properties(p => p.Text(field.Key));
+                                      break;
+                                  case "keyword":
+                                      m.Properties(p => p.Keyword(field.Key));
+                                      break;
+                                  case "date":
+                                      m.Properties(p => p.Date(field.Key));
+                                      break;
+                                  case "integer":
+                                      m.Properties(p => p.IntegerNumber(field.Key));
+                                      break;
+                                  default:
+                                      throw new NotSupportedException($"Field type '{fieldType}' is not supported.");
+                              }
+                          }
+                      }
+                  })*/
             }
 
-            return response.IsValidResponse;
+            return response.IsValidResponse && response.IsSuccess();
         }
         #endregion
 
@@ -97,20 +106,20 @@ namespace ElasticSearch.Services
             indexName = GetIndexName(indexName);
 
             var response = await _elasticClient.Indices.DeleteAsync(indexName);
-            return response.IsValidResponse;
+            return response.IsValidResponse && response.IsSuccess();
         }
         #endregion
 
         #region Add Update
-        public async Task<bool> AddUpdateDocumentAsync<T>(string indexName, T document) where T : class
+        public async Task<bool> AddUpdateDocumentAsync<T>(string indexName, T data) where T : class
         {
             indexName = GetIndexName(indexName);
 
-            var response = await _elasticClient.IndexAsync(document,
+            var response = await _elasticClient.IndexAsync(data,
                                                            idx => idx.Index(indexName)
                                                                      .OpType(OpType.Index));
 
-            return response.IsValidResponse;
+            return response.IsValidResponse && response.IsSuccess();
         }
         #endregion
 
@@ -120,18 +129,17 @@ namespace ElasticSearch.Services
             indexName = GetIndexName(indexName);
 
             var response = await _elasticClient.DeleteAsync<object>(indexName, id);
-            return response.IsValidResponse;
+            return response.IsValidResponse && response.IsSuccess();
         }
         #endregion
 
-
         #region Get By ID
-        public async Task<T> GetByIDAsync<T>(string indexName, string id) where T : class
+        public async Task<T?> GetByIDAsync<T>(string indexName, string id) where T : class
         {
             indexName = GetIndexName(indexName);
 
             var response = await _elasticClient.GetAsync<T>(indexName, id);
-            return response.Source!; // Use null-forgiving operator to ensure compatibility with the interface  
+            return response.IsValidResponse && response.IsSuccess() ? response.Source : null; // Use null-forgiving operator to ensure compatibility with the interface  
         }
         #endregion
 
@@ -145,15 +153,17 @@ namespace ElasticSearch.Services
                                                                      .Size(100)
                                                                      .Query(q => q.MatchAll())); // MatchAll query to fetch all records
 
-            return response.IsValidResponse ? response.Documents.ToList() : new List<T>();
+            return response.IsValidResponse && response.IsSuccess() ? response.Documents.ToList() : new List<T>();
         }
         #endregion
 
+        #region Get Count
         public async Task<long> GetCount(string indexName)
         {
             indexName = GetIndexName(indexName);
             var response = await _elasticClient.CountAsync<object>(c => c.Indices(indexName));
-            return response.Count;
+            return response.IsValidResponse && response.IsSuccess() ? response.Count : 0;
         }
+        #endregion
     }
 }
