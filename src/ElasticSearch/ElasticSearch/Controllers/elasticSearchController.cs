@@ -18,7 +18,7 @@ namespace ElasticSearch.Controllers
 
         #region Index
         [HttpGet()]
-        public async Task<IActionResult> Get(string indexName = "")
+        public async Task<IActionResult> ExistedIndex(string indexName = "")
         {
             return Ok(await elasticService.GetIndexExistsAsync(indexName));
         }
@@ -35,6 +35,13 @@ namespace ElasticSearch.Controllers
         {
             await elasticService.DeleteIndexAsync(indexName);
             return Ok(!await elasticService.GetIndexExistsAsync(indexName));
+        }
+
+        [HttpGet()]
+        [Route("GetCountRecordOfIndex")]
+        public async Task<IActionResult> GetCountRecordOfIndex(string indexName = "")
+        {
+            return Ok(await elasticService.GetCount(indexName));
         }
         #endregion
 

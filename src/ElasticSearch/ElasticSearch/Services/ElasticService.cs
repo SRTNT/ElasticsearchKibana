@@ -148,5 +148,12 @@ namespace ElasticSearch.Services
             return response.IsValidResponse ? response.Documents.ToList() : new List<T>();
         }
         #endregion
+
+        public async Task<long> GetCount(string indexName)
+        {
+            indexName = GetIndexName(indexName);
+            var response = await _elasticClient.CountAsync<object>(c => c.Indices(indexName));
+            return response.Count;
+        }
     }
 }

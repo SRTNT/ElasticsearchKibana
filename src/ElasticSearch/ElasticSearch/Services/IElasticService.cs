@@ -11,5 +11,7 @@
 
         Task<T> GetByIDAsync<T>(string indexName, string id) where T : class;
         Task<IEnumerable<T>> GetAllInPageAsync<T>(string indexName, int pageIndex = 1, int pageSize = 1000) where T : class;
+
+        Task<long> GetCount(string indexName);
     }
 }
