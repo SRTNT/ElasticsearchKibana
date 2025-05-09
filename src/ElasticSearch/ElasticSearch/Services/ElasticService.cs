@@ -1,6 +1,7 @@
 ﻿using Elastic.Clients.Elasticsearch;
 using Elastic.Clients.Elasticsearch.Core.Bulk;
 using Elastic.Clients.Elasticsearch.Nodes;
+using Elastic.Clients.Elasticsearch.QueryDsl;
 using Elastic.Transport;
 using ElasticSearch.Domains;
 using Microsoft.Extensions.Options;
@@ -25,7 +26,7 @@ namespace ElasticSearch.Services
             var settings = new ElasticsearchClientSettings(new Uri(_elasticsearchSetting.url))
                 .Authentication(new BasicAuthentication(_elasticsearchSetting.userName, _elasticsearchSetting.password))
                 .DefaultIndex(_elasticsearchSetting.defaultIndex)
-                .DefaultMappingFor<User>(m => m.IndexName(_elasticsearchSetting.defaultIndex))
+                .DefaultMappingFor<News>(m => m.IndexName(_elasticsearchSetting.defaultIndex))
                 .EnableDebugMode() // Enable debug mode
                 .PrettyJson(); // Optional: Makes JSON output more readable;
 
@@ -150,10 +151,28 @@ namespace ElasticSearch.Services
 
             var response = await _elasticClient.SearchAsync<T>(s => s.Indices(indexName)
                                                                      .From((pageIndex - 1) * pageSize)
-                                                                     .Size(100)
+                                                                     .Size(pageSize)
                                                                      .Query(q => q.MatchAll())); // MatchAll query to fetch all records
 
-            return response.IsValidResponse && response.IsSuccess() ? response.Documents.ToList() : new List<T>();
+            return response.IsValidResponse && response.IsSuccess()
+                ? response.Documents.ToList()
+                : new List<T>();
+        }
+        #endregion
+
+        #region Search
+        public async Task<IEnumerable<T>> SearchAsync<T>(string indexName, Action<QueryDescriptor<T>> query, int pageIndex = 1, int pageSize = 10)
+        {
+            indexName = GetIndexName(indexName);
+
+            var response = await _elasticClient.SearchAsync<T>(s => s.Indices(indexName)
+                                                                     .Query(query)
+                                                                     .From((pageIndex - 1) * pageSize)
+                                                                     .Size(pageSize));
+
+            return response.IsValidResponse && response.IsSuccess()
+                ? response.Documents.ToList()
+                : new List<T>();
         }
         #endregion
 

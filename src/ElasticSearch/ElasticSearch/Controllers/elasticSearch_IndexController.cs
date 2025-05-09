@@ -32,12 +32,16 @@ namespace ElasticSearch.Controllers
         [HttpPost()]
         public async Task<IActionResult> AddIndexUser(string indexName = "")
         {
-            await elasticService.CreateIndexAsync<Domains.User>
-                    (indexName: indexName,
-                     mapping: i => i.Properties(p => p.Text(q => q.firstName)
-                                                      .Text(q => q.lastName)
-                                                      .IntegerNumber(q => q.id))
-                    );
+            //await elasticService.CreateIndexAsync<Domains.News>
+            //        (indexName: indexName,
+            //         mapping: i => i.Properties(p => p.Text(q => q.firstName)
+            //                                          .Text(q => q.lastName)
+            //                                          .IntegerNumber(q => q.id))
+            //        );
+
+            await elasticService.CreateIndexAsync<Domains.News>
+                    (indexName: indexName, null);
+
             return Ok(await elasticService.GetIndexExistsAsync(indexName));
         }
         #endregion
