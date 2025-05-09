@@ -61,26 +61,6 @@ namespace ElasticSearch.Controllers
         }
         #endregion
 
-        #region Search
-        [HttpGet()]
-        [Route("Search/FilterDateTime")]
-        public async Task<IActionResult> Search_FilterDateTime(string indexName = "", string dateStart = "2015_07_21", string dateEnd = "2015_07_22", int pageIndex = 1)
-        {
-            var lst = await elasticService.SearchAsync<Domains.News>(
-                indexName,
-                q => q.Range(r => r.Date(d => d.Field("date") // DateRange Filter
-                                               .Gte(dateStart.Replace("_", "-"))
-                                               .Lt(dateEnd.Replace("_", "-")))),
-                pageIndex,
-                100);
-
-            if (lst.Any(q => q.date != new DateTime(2015, 07, 21)))
-            { return StatusCode(500, "Internal server error: Filter has error"); }
-
-            return Ok(lst);
-        }
-        #endregion
-
         #region Get Count Record Of Index
         [HttpGet()]
         [Route("GetCountRecordOfIndex")]
