@@ -1,3 +1,4 @@
+using Elastic.Clients.Elasticsearch;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
@@ -18,6 +19,31 @@ namespace ElasticSearch.Controllers
         {
             _logger = logger;
             this.elasticService = elasticService;
+        }
+        #endregion
+
+        #region Search - Query With Aggrigation
+        [HttpPost()]
+        [Route("Search/Query/Aggrigation")]
+        public async Task<IActionResult> Search_ByText_MultiColumn_BoostField(
+           string indexName = "",
+           int pageIndex = 1)
+        {
+            var fieldName = nameof(Domains.News.headline);
+
+            string text = "party planning";
+
+            var lst = await elasticService.SearchAggregationsAsync<Domains.News>(
+                       indexName,
+                       q => q.Match(m => m.Field(fieldName) // Specify the field to match
+                                          .Query(text) // The query string
+                                          .MinimumShouldMatch(2)), // Specify minimum should match
+                       aggregations => aggregations.Add("agg_name",
+                                                        aggregation => aggregation.Max(max => max.Field(x => x.date))),
+                       pageIndex,
+                       100);
+
+            return Ok(lst);
         }
         #endregion
 

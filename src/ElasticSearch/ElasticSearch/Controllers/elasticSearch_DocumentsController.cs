@@ -69,5 +69,14 @@ namespace ElasticSearch.Controllers
             return Ok(await elasticService.GetCount(indexName));
         }
         #endregion
+
+        #region Get Count Record Of Index
+        [HttpGet()]
+        [Route("GetCountDistinc")]
+        public async Task<IActionResult> GetCountDistinc(string indexName = "", string columnName = nameof(Domains.News.category))
+        {
+            return Ok(await elasticService.GetCountDistinc<Domains.News>(indexName, columnName));
+        }
+        #endregion
     }
 }

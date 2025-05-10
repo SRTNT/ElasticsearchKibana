@@ -1,4 +1,5 @@
 ﻿using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.Aggregations;
 using Elastic.Clients.Elasticsearch.Core.Bulk;
 using Elastic.Clients.Elasticsearch.Nodes;
 using Elastic.Clients.Elasticsearch.QueryDsl;
@@ -26,9 +27,13 @@ namespace ElasticSearch.Services
             var settings = new ElasticsearchClientSettings(new Uri(_elasticsearchSetting.url))
                 .Authentication(new BasicAuthentication(_elasticsearchSetting.userName, _elasticsearchSetting.password))
                 .DefaultIndex(_elasticsearchSetting.defaultIndex)
-                .DefaultMappingFor<News>(m => m.IndexName(_elasticsearchSetting.defaultIndex))
+                .DefaultMappingFor<News>
+                (m => m.IndexName(_elasticsearchSetting.defaultIndex)
+                       //.IdProperty(p=>p.link)
+                )
                 .EnableDebugMode() // Enable debug mode
-                .PrettyJson(); // Optional: Makes JSON output more readable;
+                .PrettyJson() // Optional: Makes JSON output more readable;
+                .RequestTimeout(TimeSpan.FromMinutes(2));
 
             _elasticClient = new ElasticsearchClient(settings);
         }
@@ -176,12 +181,56 @@ namespace ElasticSearch.Services
         }
         #endregion
 
+        #region Search With Aggregations
+        public async Task<IEnumerable<T>> SearchAggregationsAsync<T>
+            (string indexName, 
+             Action<QueryDescriptor<T>> query,
+             Action<Elastic.Clients.Elasticsearch.Fluent.FluentDictionaryOfStringAggregation<T>> aggregations,
+             int pageIndex = 1, 
+             int pageSize = 10)
+        {
+            indexName = GetIndexName(indexName);
+
+            var response = await _elasticClient.SearchAsync<T>(s => s.Indices(indexName)
+                                                                     .Query(query)
+                                                                     .Aggregations(aggregations)
+                                                                     .From((pageIndex - 1) * pageSize)
+                                                                     .Size(pageSize));
+
+            return response.IsValidResponse && response.IsSuccess()
+                ? response.Documents.ToList()
+                : new List<T>();
+        }
+        #endregion
+
         #region Get Count
         public async Task<long> GetCount(string indexName)
         {
             indexName = GetIndexName(indexName);
             var response = await _elasticClient.CountAsync<object>(c => c.Indices(indexName));
             return response.IsValidResponse && response.IsSuccess() ? response.Count : 0;
+        }
+        #endregion
+
+        #region Get Count Distinc
+        public async Task<long> GetCountDistinc<T>(string indexName, string columnName)
+        {
+            var name = "name_" + columnName;
+            indexName = GetIndexName(indexName);
+
+            var response = await _elasticClient.SearchAsync<T>(s => s
+                .Size(0) // Set size to 0 to only get aggregation results  
+                .Aggregations(a => a.Add(name, new CardinalityAggregation
+                {
+                    Field = columnName
+                })));
+
+            return response.IsValidResponse &&
+                   response.IsSuccess() &&
+                   response.Aggregations != null &&
+                   response.Aggregations.GetCardinality(name)?.Value != null
+                ? (long)response.Aggregations.GetCardinality(name)!.Value
+                : 0;
         }
         #endregion
     }

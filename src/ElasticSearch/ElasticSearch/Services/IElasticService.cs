@@ -1,4 +1,6 @@
-﻿namespace ElasticSearch.Services
+﻿using Elastic.Clients.Elasticsearch.QueryDsl;
+
+namespace ElasticSearch.Services
 {
     public interface IElasticService
     {
@@ -11,8 +13,21 @@
 
         Task<T?> GetByIDAsync<T>(string indexName, string id) where T : class;
         Task<IEnumerable<T>> GetAllInPageAsync<T>(string indexName, int pageIndex = 1, int pageSize = 1000) where T : class;
-        Task<IEnumerable<T>> SearchAsync<T>(string indexName, Action<Elastic.Clients.Elasticsearch.QueryDsl.QueryDescriptor<T>> query, int pageIndex = 1, int pageSize = 10);
+
+        Task<IEnumerable<T>> SearchAsync<T>
+            (string indexName,
+             Action<Elastic.Clients.Elasticsearch.QueryDsl.QueryDescriptor<T>> query,
+             int pageIndex = 1,
+             int pageSize = 10);
+        Task<IEnumerable<T>> SearchAggregationsAsync<T>
+            (string indexName,
+             Action<QueryDescriptor<T>> query,
+             Action<Elastic.Clients.Elasticsearch.Fluent.FluentDictionaryOfStringAggregation<T>> aggregations,
+             int pageIndex = 1,
+             int pageSize = 10);
 
         Task<long> GetCount(string indexName);
+
+        Task<long> GetCountDistinc<T>(string indexName, string columnName);
     }
 }
